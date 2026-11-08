@@ -2,18 +2,34 @@
 import csv, io, os, re, smtplib, sqlite3, threading, time
 from datetime import datetime
 from email.message import EmailMessage
+from hmac import compare_digest
 from zoneinfo import ZoneInfo
 
 import requests
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-DB, CV_DIR = os.path.join(BASE, "data.db"), os.path.join(BASE, "uploads")
+DATA_DIR = os.environ.get("DATA_DIR", BASE)
+os.makedirs(DATA_DIR, exist_ok=True)
+DB, CV_DIR = os.path.join(DATA_DIR, "data.db"), os.path.join(DATA_DIR, "uploads")
 PARIS = ZoneInfo("Europe/Paris")
 OPEN = [(9, 0, 12, 0), (14, 0, 17, 30)]  # Lun-Ven
 os.makedirs(CV_DIR, exist_ok=True)
 app = Flask(__name__)
 state = {"running": False, "last": 0.0, "msg": "Arrêté", "prep": False}
+
+
+@app.before_request
+def require_render_auth():
+    if request.path == "/healthz" or os.environ.get("RENDER") != "true":
+        return None
+    username, password = os.environ.get("APP_USERNAME"), os.environ.get("APP_PASSWORD")
+    if not username or not password:
+        return "Application authentication is not configured", 503
+    auth = request.authorization
+    if auth and auth.username and auth.password and compare_digest(auth.username, username) and compare_digest(auth.password, password):
+        return None
+    return Response("Authentication required", 401, {"WWW-Authenticate": 'Basic realm="Candidatures Auto"'})
 
 DEFAULTS = {
     "name": "", "email": "", "smtp_host": "smtp.gmail.com", "smtp_port": "587", "smtp_pass": "",
@@ -132,6 +148,10 @@ def worker():
 
 @app.get("/")
 def index(): return render_template("index.html")
+
+
+@app.get("/healthz")
+def healthz(): return jsonify(ok=True)
 
 
 @app.route("/api/settings", methods=["GET", "POST"])
@@ -265,7 +285,10 @@ def engine():
     return jsonify(running=state["running"], prep=state["prep"], msg=state["msg"], open=is_open(now), paris=now.strftime("%a %H:%M"), today=sent)
 
 
+init()
+state["running"] = cfg()["running"] == "1"
+state["msg"] = "En marche" if state["running"] else "Arrêté"
+threading.Thread(target=worker, daemon=True).start()
+
 if __name__ == "__main__":
-    init(); state["running"] = cfg()["running"] == "1"; state["msg"] = "En marche" if state["running"] else "Arrêté"
-    threading.Thread(target=worker, daemon=True).start()
     app.run(port=5000)

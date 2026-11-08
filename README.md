@@ -1,6 +1,6 @@
 # Candidatures Auto
 
-Send personalized spontaneous internship applications (*candidatures spontanées*) to companies and startups in France, automatically, **only during their business hours**.
+Send personalized spontaneous internship applications (_candidatures spontanées_) to companies and startups in France, automatically, **only during their business hours**.
 
 Upload your CV, find internship offers across several job platforms, let the app write a tailored email for each contact, and have it sent one by one on weekdays in Paris time.
 
@@ -30,12 +30,25 @@ python app.py
 
 Open <http://localhost:5000>.
 
+## Deploy on Render
+
+This app keeps its contacts, settings, and uploaded CV on disk. Use a paid Render web service with a persistent disk; the Blueprint below mounts one at `/var/data`. The deployment is protected by HTTP Basic authentication, so set a private username and password when Render prompts for `APP_USERNAME` and `APP_PASSWORD`.
+
+1. Push this repository to GitHub, GitLab, or Bitbucket.
+2. In Render, choose **New → Blueprint**, connect the repository, and apply `render.yaml`.
+3. Enter values for `APP_USERNAME` and `APP_PASSWORD` when prompted. Keep them private.
+4. Wait for the deploy to become live, then open its `onrender.com` URL and authenticate.
+
+The repository originally used a file named `gitignore`, which Git does not recognize. `.gitignore` now excludes `data.db` and `uploads/`, and the currently tracked database and CV have been removed from the Git index while preserving local copies. Commit and push that removal before deploying. Earlier commits may still contain the files; rotate credentials stored in the database, and purge the files from Git history if the repository is public. The database stores SMTP and Anthropic credentials in clear text, so protect it as sensitive data.
+
+The service uses one Gunicorn worker because the email sender runs in-process and SQLite is local to the persistent disk. Render disks require a paid service plan and prevent zero-downtime deploys. Do not scale this service to multiple instances.
+
 ## Usage
 
 1. **CV**: upload your PDF.
 2. **Message**: set your subject and text, your target keywords, and a short "about you" with real facts (studies, projects, skills). Optionally add an Anthropic API key for fully personalized messages.
-3. **Contacts**: click *Trouver des offres* (choose a location, default `France`) and/or import a CSV. Click *Préparer et enregistrer les messages* to write and save the drafts.
-4. **Sending**: enter your name, sending address and SMTP credentials, set the daily cap and delay, then click *Démarrer*.
+3. **Contacts**: click _Trouver des offres_ (choose a location, default `France`) and/or import a CSV. Click _Préparer et enregistrer les messages_ to write and save the drafts.
+4. **Sending**: enter your name, sending address and SMTP credentials, set the daily cap and delay, then click _Démarrer_.
 
 Keep the terminal open: emails are only sent while the app is running.
 
@@ -73,8 +86,8 @@ requirements.txt    Dependencies
 
 ## Security
 
-- SMTP password and API key are stored **in clear text** in the local `data.db`. Run the app locally only, and never commit `data.db` or `uploads/` (they are in `.gitignore`).
-- The server has no authentication: do not expose it on a public network.
+- SMTP password and API key are stored **in clear text** in `data.db`; protect the file and never commit it or uploaded CVs.
+- Render deployments require HTTP Basic authentication configured through `APP_USERNAME` and `APP_PASSWORD`. Local development remains unauthenticated by default.
 
 ## Responsible use
 
